@@ -38,6 +38,7 @@ letsencrypt/
 *.save
 *.bak
 *~
+compose.yml.bak
 
 # Optional large artifacts
 *.tar.gz
