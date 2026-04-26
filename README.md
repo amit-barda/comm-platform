@@ -1,47 +1,47 @@
 # Collaboration Platform Deployment
 
-## סקירה כללית
+## Overview
 
-הפרויקט מפריס פלטפורמת שיתוף פעולה מבוססת קוד פתוח על שרת Ubuntu בענן, עם **Rocket.Chat** לצ'אט ארגוני ו-**Jitsi Meet** לוידאו, שניהם חשופים ב-HTTPS בכתובות משנה ייעודיות. **אימות משתמשים** ממומש בצורה מרכזית באמצעות **Google OAuth 2.0** ושירות Node.js שמנפק JWT ל-Jitsi, יחד עם **Nginx** כ-reverse proxy ו-**Let’s Encrypt (Certbot)** לתעודות TLS. התצורה מבוססת **Docker** ו-**Docker Compose** ומופרדת בין רכיבים לפי תיקיות, עם ערכי רגישות בקבצי `.env` שאינם נכללים במאגר.
+This project deploys an open-source collaboration stack on an Ubuntu cloud VM: **Rocket.Chat** for team chat and **Jitsi Meet** for video, both exposed on HTTPS under dedicated subdomains. **Authentication** is implemented using **Google OAuth 2.0** and a small **Node.js** service that issues **JWTs** for Jitsi, together with **Nginx** as a reverse proxy and **Let’s Encrypt (Certbot)** for TLS certificates. Everything runs on **Docker** and **Docker Compose**, split by component directories, with secrets in `.env` files that are **not** committed to Git.
 
-## דרישות המטלה
+## Assignment requirements
 
-- Rocket.Chat בכתובת `chat.think-deploy.com` (או שקולה)
-- Jitsi Meet בכתובת `video.think-deploy.com` (או שקולה)
-- בקרת גישה / אימות ארגוני באמצעות **Google SSO / OAuth2**
-- אופציונלי: אינטגרציית **SMTP** להתראות ושחזור סיסמה
-- אופציונלי: **ניטור ותצפית** עם Grafana ו-Loki (ובפרויקט זה גם Prometheus ו-Promtail)
+- Rocket.Chat at `chat.think-deploy.com` (or equivalent)
+- Jitsi Meet at `video.think-deploy.com` (or equivalent)
+- Organizational access control via **Google SSO / OAuth2**
+- Optional: **SMTP** for alerts and password recovery
+- Optional: **Observability** with Grafana and Loki (this repo also includes Prometheus and Promtail)
 
-## סטטוס מימוש
+## Implementation status
 
-| דרישה | סטטוס | הערות |
-|--------|--------|--------|
-| Rocket.Chat (צ'אט) | הושלם | `rocketchat/docker-compose.yml` — MongoDB + Rocket.Chat, `ROOT_URL` ל-`https://chat.think-deploy.com` |
-| Jitsi Meet (וידאו) | הושלם | `jitsi/docker-compose.yml` — מחסנית jitsi-docker, אימות JWT |
-| Google OAuth / SSO | הושלם (וידאו) / חלקי (צ'אט) | **וידאו:** שירות `auth/` (Passport Google) מנפק JWT שמתאים ל-Jitsi. **צ'אט:** אין קובצי Git עם OAuth מוכן; מומלץ להשלים OAuth/הגבלת דומיין דרך ממשק ניהול Rocket.Chat |
-| אינטגרציית SMTP | לא מומש / דולג | לא הוגדר SMTP ל-Rocket.Chat או שירותים אחרים |
-| Grafana, Loki, ניטור | הושלם | `monitoring/docker-compose.yml` — Loki, Promtail, Grafana, Prometheus, Node Exporter. Nginx ל-Grafana: `grafana.think-deploy.com` |
+| Requirement | Status | Notes |
+|-------------|--------|--------|
+| Rocket.Chat (chat) | Completed | `rocketchat/docker-compose.yml` — MongoDB + Rocket.Chat, `ROOT_URL` → `https://chat.think-deploy.com` |
+| Jitsi Meet (video) | Completed | `jitsi/docker-compose.yml` — docker-jitsi-meet stack, JWT auth |
+| Google OAuth / SSO | Completed (video) / Partial (chat) | **Video:** `auth/` service (Passport Google) issues JWTs for Jitsi. **Chat:** no OAuth config in Git; complete OAuth / domain restriction via Rocket.Chat admin UI |
+| SMTP integration | Not implemented / Skipped | No SMTP configured for Rocket.Chat or other services |
+| Grafana, Loki, monitoring | Completed | `monitoring/docker-compose.yml` — Loki, Promtail, Grafana, Prometheus, Node Exporter. Nginx for Grafana: `grafana.think-deploy.com` |
 
-**סיכום קצר:** Rocket.Chat, Jitsi, שירות האימות ל-Google+JWT, Nginx, TLS ו-Docker — פועלים לפי התצורה בפרויקט. SMTP לא מומש. מחסנית ניטור (Grafana/Loki/…) קיימת בקבצי הפרויקט ונפרסה בהתאם לסביבה.
+**Short summary:** Rocket.Chat, Jitsi, the Google+JWT auth service, Nginx, TLS, and Docker are wired as in this repository. SMTP is not implemented. The observability stack (Grafana/Loki/…) is present in the repo and can be deployed per environment.
 
-## ארכיטקטורת המערכת
+## System architecture
 
-- **מערכת הפעלה:** Ubuntu על מופע VM בענן.
-- **קונטיינרים:** Docker Engine ו-Docker Compose לשירותים: Rocket.Chat+MongoDB, Jitsi (web, prosody, jicofo, jvb, …), שירות `auth` (Node.js), ואופציונלית מחסנית `monitoring`.
-- **Nginx:** reverse proxy ל-HTTPS, מפנה כל תת-דומיין לפורט מקומי (127.0.0.1) של השירות המתאים.
-- **Let’s Encrypt / Certbot:** תעודות TLS ל-`chat`, `video`, `auth`, `grafana` (לפי הצורך).
-- **Rocket.Chat + MongoDB:** אחסון ויישום צ'אט.
-- **Jitsi Meet:** WebRTC, עם אימות **JWT** (מאומת מול `JWT_APP_SECRET` ב-`.env` של Jitsi).
-- **שירות אימות (Node.js):** אימות Google OAuth, ללא session — לאחר login מונפק JWT (אותו סוד ומבנה claim כפי ש-Jitsi מצפה) והפניה לכניסה לוידאו.
-- **Google:** ספק זהויות (Identity Provider) לפי OAuth 2.0.
+- **OS:** Ubuntu on a cloud VM.
+- **Containers:** Docker Engine and Docker Compose for Rocket.Chat + MongoDB, Jitsi (web, prosody, jicofo, jvb, …), the `auth` Node.js service, and optionally the `monitoring` stack.
+- **Nginx:** HTTPS reverse proxy; each subdomain forwards to the correct local port on `127.0.0.1`.
+- **Let’s Encrypt / Certbot:** TLS certificates for `chat`, `video`, `auth`, `grafana` as needed.
+- **Rocket.Chat + MongoDB:** Chat application and database.
+- **Jitsi Meet:** WebRTC conferencing with **JWT** auth (validated against `JWT_APP_SECRET` in Jitsi’s `.env`).
+- **Auth service (Node.js):** Google OAuth without sessions; after login a JWT is signed (same secret and claim shape Jitsi expects) and the browser is redirected into the video flow.
+- **Google:** OAuth 2.0 identity provider.
 
-### דיאגרמת ASCII (לפי הפריסה בפועל)
+### ASCII diagram (as deployed)
 
 ```
                     Internet
                         |
                         v
-              DNS (למשל Cloudflare)
+              DNS (e.g. Cloudflare)
                         |
                         v
             Nginx (Reverse Proxy) + TLS 443
@@ -57,69 +57,69 @@ chat.think-deploy.com  video...        auth...          grafana...
   |                    |                    |
  MongoDB                |                    +-------> Google OAuth
  (Docker)                \
-                           +--> (JWT מאומת ב-Prosody/Jitsi)
+                           +--> (JWT verified in Prosody/Jitsi)
 ```
 
-**הערה:** שירותי Jitsi הנוספים (JVB, Prosody, Jicofo וכו') רצים ב-Docker אך לא הוצגו בדיאגרמה כדי לשמור על קריאות.
+**Note:** Additional Jitsi services (JVB, Prosody, Jicofo, etc.) run in Docker but are omitted from the diagram for clarity.
 
-## קישורים למערכות
+## Service URLs
 
 - **Rocket.Chat:** [https://chat.think-deploy.com](https://chat.think-deploy.com)
 - **Jitsi Meet:** [https://video.think-deploy.com](https://video.think-deploy.com)
-- **שירות אימות (אם מופעל):** [https://auth.think-deploy.com](https://auth.think-deploy.com)
-- **Grafana (אופציונלי, אם הופעל):** [https://grafana.think-deploy.com](https://grafana.think-deploy.com)
+- **Auth service (when enabled):** [https://auth.think-deploy.com](https://auth.think-deploy.com)
+- **Grafana (optional, when enabled):** [https://grafana.think-deploy.com](https://grafana.think-deploy.com)
 
-## רכיבי הפרויקט
+## Project components
 
-- **Rocket.Chat:** שרת צ'אט; תלוי ב-MongoDB עם replica set (כפי שמוגדר ב-`rocketchat/docker-compose.yml`). חשוף ב-`ROOT_URL` לכתובת הציבורית.
-- **Jitsi Meet:** התקנת `docker-jitsi-meet`; `AUTH_TYPE=jwt` ו-`ENABLE_AUTH=1` לאימות דרך JWT שנחתם על ידי שירות `auth` (וההגדרות ב-`.env` חייבות להתאים).
-- **Nginx:** קבצי דוגמה תחת `nginx/sites-available/`. בשרת: קישור מ-`sites-enabled`, בדיקה עם `nginx -t`, וטעינה מחדש.
-- **Certbot / Let’s Encrypt:** הנפקת תעודות לתת-הדומיינים; Nginx מוגדר לנתיבי `fullchain.pem` / `privkey.pem` תחת `/etc/letsencrypt/live/<שם>`.
-- **Google OAuth:** אפליקציית Web ב-Google Cloud; Redirect URI: `https://auth.think-deploy.com/auth/google/callback`. מזהים וסודות נמצאים ב-**משתני סביבה בלבד**.
-- **Docker Compose:** כל stack עם `docker-compose.yml` (או שם שקול) נפרד; אין קובץ אחד שמריץ הכל — נוח לתחזוקה ולפריסה הדרגתית.
-- **`.env.example`:** בתיקיית השורש, ב-`auth/app/`, ב-`monitoring/`, וב-`jitsi/.env.production.example` (בנוסף ל-`jitsi/env.example` המקורי) — רק **פלייס-הולדרים** ללא סודות אמיתיים.
+- **Rocket.Chat:** Chat server; depends on MongoDB with a replica set (see `rocketchat/docker-compose.yml`). `ROOT_URL` points at the public HTTPS URL.
+- **Jitsi Meet:** docker-jitsi-meet deployment; `AUTH_TYPE=jwt` and `ENABLE_AUTH=1` so JWTs signed by `auth` are accepted (`.env` must match).
+- **Nginx:** Example vhosts under `nginx/sites-available/`. On the server: symlink into `sites-enabled`, `nginx -t`, reload.
+- **Certbot / Let’s Encrypt:** Issue certs per subdomain; Nginx references `fullchain.pem` / `privkey.pem` under `/etc/letsencrypt/live/<name>/`.
+- **Google OAuth:** Web application in Google Cloud; redirect URI: `https://auth.think-deploy.com/auth/google/callback`. Client ID and secret live in **environment variables only**.
+- **Docker Compose:** Each stack has its own `docker-compose.yml`; there is no single mega-compose file—easier to operate and upgrade piece by piece.
+- **`.env.example` files:** At repo root, `auth/app/`, `monitoring/`, and `jitsi/.env.production.example` (plus upstream `jitsi/env.example`) — **placeholders only**, no real secrets.
 
-## שלבי התקנה ופריסה
+## Installation and deployment steps
 
-1. **התקנת כלים על השרת (דוגמה — Ubuntu):**
+1. **Install dependencies (example — Ubuntu):**
    ```bash
    sudo apt update
    sudo apt install -y docker.io docker-compose-plugin nginx certbot python3-certbot-nginx git
-   sudo usermod -aG docker "$USER"   # נדרש logout/login
+   sudo usermod -aG docker "$USER"   # log out and back in
    ```
-2. **שכפול המאגר (לאחר העלאה ל-GitHub):**
+2. **Clone the repository (after it is on GitHub):**
    ```bash
    git clone <YOUR_REPO_URL>
    cd comm-platform
    ```
-3. **העתקת קבצי סביבה:**  
-   - `cp auth/app/.env.example auth/app/.env`  
-   - `cp jitsi/.env.production.example jitsi/.env` (ולערוך לפי `jitsi/env.example` לפרטים נוספים)  
-   - `cp monitoring/.env.example monitoring/.env` (אם משתמשים ב-Grafana)  
-   - `cp rocketchat/.env.example rocketchat/.env` (אם נדרש)
-4. **מילוי משתנים ב-`.env`:** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `JWT_SECRET` (ו-**אותו ערך** עבור `JWT_APP_SECRET` ב-Jitsi), דומיינים, `PUBLIC_URL` ל-Jitsi, ועוד.
-5. **הרצת שירותים (מתוך כל תיקייה, לפי הסדר):**
+3. **Copy environment files:**
+   - `cp auth/app/.env.example auth/app/.env`
+   - `cp jitsi/.env.production.example jitsi/.env` (edit further using `jitsi/env.example` as reference)
+   - `cp monitoring/.env.example monitoring/.env` (if using Grafana)
+   - `cp rocketchat/.env.example rocketchat/.env` (if needed)
+4. **Fill in `.env` values:** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `JWT_SECRET` (**same value** as `JWT_APP_SECRET` in Jitsi), domains, Jitsi `PUBLIC_URL`, etc.
+5. **Start services (from each directory, in order):**
    ```bash
    cd rocketchat && docker compose up -d
    cd ../jitsi && docker compose up -d
    cd ../auth/app && docker compose up -d
-   cd ../monitoring && docker compose up -d   # אופציונלי
+   cd ../monitoring && docker compose up -d   # optional
    ```
-6. **Nginx:** להעתיק/להתאים את `nginx/sites-available/*.conf` ל-`/etc/nginx/sites-available/`, ליצור קישורי `sites-enabled`, `sudo nginx -t`, `sudo systemctl reload nginx`.
-7. **TLS:** `sudo certbot --nginx -d chat.think-deploy.com -d video.think-deploy.com -d auth.think-deploy.com` (ו-`grafana` אם רלוונטי).
-8. **אימות בדפדפן:** כניסה ל-`https://chat...` ו-`https://video...` לאחר התחלת Jitsi ו-Rocket Chat; בדיקת flow OAuth ב-`https://auth.../auth/google`.
+6. **Nginx:** Copy or adapt `nginx/sites-available/*.conf` into `/etc/nginx/sites-available/`, enable symlinks in `sites-enabled`, `sudo nginx -t`, `sudo systemctl reload nginx`.
+7. **TLS:** e.g. `sudo certbot --nginx -d chat.think-deploy.com -d video.think-deploy.com -d auth.think-deploy.com` (add `grafana` if used).
+8. **Browser validation:** Open `https://chat…` and `https://video…` after stacks are up; test OAuth at `https://auth…/auth/google`.
 
-**חשוב (Jitsi):** בפתיחת אש בחומת אש/קבוצת אבטחה יש לאפשר בדרך כלל TCP 80/443, **UDP 10000** למדיה, ו-SSH. התאם ל-IP הציבורי (למשל `JVB_ADVERTISE_IPS`).
+**Important (Jitsi):** Allow TCP 80/443, **UDP 10000** for media, and SSH in the security group / firewall. Set `JVB_ADVERTISE_IPS` to the public IP when behind NAT.
 
 ## Google OAuth / SSO
 
-- ב-Google Cloud Console נוצרה אפליקציית OAuth (סוג *Web application*).
-- הוגדר **Redirect URI** מדויק: `https://auth.think-deploy.com/auth/google/callback` — כל אי-התאמה תגרום לשגיאת `redirect_uri_mismatch`.
-- `GOOGLE_CLIENT_ID` ו-`GOOGLE_CLIENT_SECRET` נשמרים ב-`auth/app/.env` (לא ב-Git).
-- ה-flow: המשתמש מגיע ל-`/auth/google` → Google → callback → המערכת מנפקת JWT ומפנה ל-Jitsi עם ה-JWT.
-- **לא יש לשמור** אישורי OAuth, מפתחות JWT או סיסמאות admin במאגר.
+- Create an OAuth **Web application** in Google Cloud Console.
+- Configure an exact **Redirect URI:** `https://auth.think-deploy.com/auth/google/callback` — any mismatch causes `redirect_uri_mismatch`.
+- Store `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `auth/app/.env` (never in Git).
+- Flow: user hits `/auth/google` → Google → callback → service signs JWT → redirect to Jitsi with the JWT.
+- **Do not** commit OAuth client secrets, JWT signing keys, or admin passwords.
 
-פלייס-הולדרים אופייניים:
+Typical placeholders:
 
 ```env
 GOOGLE_CLIENT_ID=
@@ -128,57 +128,57 @@ JWT_SECRET=
 ALLOWED_DOMAIN=
 ```
 
-(שימוש ב-`ALLOWED_DOMAIN` מומלץ כהרחבה עתידית לסינון דומיין מייל — הקוד ב-`auth/app/app.js` מסתמך כיום על מדיניות Google והגדרת האפליקציה.)
+(`ALLOWED_DOMAIN` is a suggested future extension for email-domain filtering; current `auth/app/app.js` relies on Google app settings and policy.)
 
-## אתגרים ובעיות שנתקלנו בהן
+## Challenges encountered
 
-1. **Docker Compose ורישיון הפקודה**  
-   **בעיה:** בחלק מהשרתים אין `docker compose` (פלאגין) או שגרסה ישנה.  
-   **פתרון:** התקנת `docker-compose-plugin` מה-pkg של Docker, או שימוש ב-`docker-compose` עצמאי (בינארי) אם הדבר נדרש במדיניות הארגון. לאחר מכן `docker compose version` לאימות.
+1. **Docker Compose availability**  
+   **Problem:** Some hosts lack the `docker compose` plugin or run an old version.  
+   **Solution:** Install `docker-compose-plugin` from Docker’s packages, or use a standalone `docker-compose` binary if required by policy. Verify with `docker compose version`.
 
-2. **Nginx ו-HTTPS למספר תת-דומיינים**  
-   **בעיה:** כל שירות מאזין בפורט שונה על localhost; הדפדפן חייב לראות 443 אחד עם SNI.  
-   **פתרון:** `server` נפרד לכל `server_name`, `proxy_pass` ל-`127.0.0.1:PORT` המתאים, Certbot מוסיף בלוקי SSL.
+2. **Nginx and HTTPS for multiple subdomains**  
+   **Problem:** Each backend listens on a different localhost port; browsers should only see port 443 with SNI.  
+   **Solution:** One `server` block per `server_name`, `proxy_pass` to the matching `127.0.0.1:PORT`, Certbot-managed SSL blocks.
 
-3. **התאמת callback של Google OAuth**  
-   **בעיה:** התחברות נכשלת אם ה-URL ב-Google Cloud לא תואם בדיוק לנתיב בשרת.  
-   **פתרון:** עדכון ה-redirect ל-`https://auth.think-deploy.com/auth/google/callback` והשארת `callbackURL` בקוד זהה (ראו `auth/app/app.js`).
+3. **Google OAuth callback mismatch**  
+   **Problem:** Login fails if the redirect URL in Google Cloud does not exactly match the server path.  
+   **Solution:** Set redirect to `https://auth.think-deploy.com/auth/google/callback` and keep `callbackURL` in code aligned (see `auth/app/app.js`).
 
-4. **מורכבות אימות ב-Jitsi**  
-   **בעיה:** Jitsi אינו מחובר "מהקופסה" ל-SaaS Google Login; האימות הארגוני נעשה בד"כ ב-JWT או LDAP וכו'.  
-   **פתרון:** שירות חיצוני (Node) שמבצע Google OAuth, חותם JWT שמתאים ל-`JWT_APP_ID` / `JWT_APP_SECRET` / issuers/audiences ב-Prosody, ואז Jitsi מאמת את ה-JWT. משתמשים מגיעים לדף כניסה/redirect שמזין את הדפדפן לחדר עם הטוקן (למשל flow עם `/test?jwt=...` לפי המימוש).
+4. **Jitsi authentication complexity**  
+   **Problem:** Jitsi does not ship with “click Google and you’re in” like a SaaS product; org auth is usually JWT, LDAP, etc.  
+   **Solution:** External Node service performs Google OAuth, signs a JWT matching `JWT_APP_ID` / `JWT_APP_SECRET` / issuers / audiences in Prosody; Jitsi validates it. Users follow an entry/redirect flow (e.g. `/test?jwt=...` in this implementation).
 
-5. **משתני סביבה וסודות**  
-   **בעיה:** דליפת מפתחות ל-Git מסכנת את כל מערכת האימות.  
-   **פתרון:** `.env` מקומי, `.env.example` עם פלייס-הולדרים, ו-`.gitignore` שמונע commit של `.env` ומפתחות.
+5. **Environment variables and secrets**  
+   **Problem:** Leaking keys into Git compromises the whole auth story.  
+   **Solution:** Local `.env`, `.env.example` templates, and `.gitignore` rules for secrets and keys.
 
-6. **חומת אש ורשת**  
-   **בעיה:** וידאו ללא UDP או IP שגוי מפרסם שובת שיחה/שליטה.  
-   **פתרון:** פתיחת UDP 10000, והגדרת `JVB_ADVERTISE_IPS` לפי כתובת ציבורית אם ה-VM מאחורי NAT.
+6. **Firewall and networking**  
+   **Problem:** Video breaks without UDP or with wrong advertised IP.  
+   **Solution:** Open UDP 10000; set `JVB_ADVERTISE_IPS` to the public IP on cloud/NAT setups.
 
 7. **DNS**  
-   **בעיה:** Let’s Encrypt ו-Google redirect דורשים ש-DNS (A/AAAA) יצביעו לשרת לפני אימות.  
-   **פתרון:** יצירת רשומות ל-`chat`, `video`, `auth` (ו-`grafana`).
+   **Problem:** Let’s Encrypt and Google redirects need A/AAAA records pointing at the server before validation.  
+   **Solution:** Create records for `chat`, `video`, `auth` (and `grafana` if used).
 
-## אבטחה
+## Security
 
-- סודות נשמרים ב-`.env` בלבד, והקבצים האלה **אינם** במאגר.
-- **HTTPS** מופעל לכל הכניסות הציבוריות.
-- **אין** שמירה על אישורי מנהל Rocket.Chat / Grafana במאגר.
-- **OAuth** ו-JWT מופיעים ב-Git רק כדוגמאות ריקות (`…example`).
-- **`.gitignore`** מיישם את הכללים לעיל (כולל `node_modules`, לוגים, `.pem`, `letsencrypt/`, וכו').
+- Secrets live in `.env` only; those files are **not** in the repository.
+- **HTTPS** is enabled for all public entrypoints.
+- **No** Rocket.Chat / Grafana admin credentials are stored in Git.
+- **OAuth** and JWT appear in the repo only as empty examples (`*.example`).
+- **`.gitignore`** covers `node_modules`, logs, `.pem`, `letsencrypt/`, and similar.
 
 ## Credentials
 
-**אין** שמירה על אישורי מנהל או סיסמאות במאגר. אם נדרש ביקורת (review) חיצונית, יש לשלוח אישורים בערוץ מוצמד ו**לא** לשמור ב-GitHub.
+**No** admin credentials or passwords are committed. If a third party needs access for review, share credentials over a private channel — **not** on GitHub.
 
-## מה לא מומש
+## Not implemented
 
-- **SMTP** (מייל להתראות, איפוס סיסמה, וכו') — **לא** הוגדר; יש לתעד בבירור בפרויקט הפרודקשן אם/when מוסיפים.
-- **מגבלת דומין ארגוני ב-Rocket.Chat** — לא הוטמעה כקונפיגורציית Git; מומלץ להשלים דרך OAuth/ SAML או מדיניות ב-Google.
-- **שירות `auth`:** אין סינון לפי `ALLOWED_DOMAIN` בקוד הנוכחי (אפשרי כשיפור עתידי).
+- **SMTP** (alerts, password reset, etc.) — **not** configured; document when/if you add it in production.
+- **Rocket.Chat org-only restriction** — not encoded as Git-tracked config; prefer OAuth/SAML or Google workspace policy in admin UI.
+- **`auth` service:** no `ALLOWED_DOMAIN` filtering in the current code (possible future enhancement).
 
-## בדיקות שבוצעו
+## Validation commands
 
 ```bash
 docker ps
@@ -190,37 +190,38 @@ curl -I https://video.think-deploy.com
 curl -I https://auth.think-deploy.com
 ```
 
-לפי הצורך:
+As needed:
+
 ```bash
 journalctl -u nginx -e
 docker logs <container_name>
 ```
 
-## מבנה תיקיות
+## Directory layout
 
 ```
 comm-platform/
-├── .env.example                 # אינדקס הפניה לכל קבצי .env.example
+├── .env.example                 # Pointers to per-stack .env.example files
 ├── .gitignore
 ├── README.md
 ├── nginx/
-│   └── sites-available/         # דוגמאות vhost (chat, video, auth, grafana)
+│   └── sites-available/         # Example vhosts (chat, video, auth, grafana)
 ├── rocketchat/
 │   ├── docker-compose.yml       # MongoDB + Rocket.Chat
 │   ├── .env.example
-│   └── ...                      # עוד קבצי upstream/קומפוזיציה
+│   └── ...                      # Additional upstream / compose files
 ├── jitsi/
 │   ├── docker-compose.yml
 │   ├── env.example
 │   ├── .env.production.example
-│   └── ...                      # מקור jitsi-docker
+│   └── ...                      # docker-jitsi-meet upstream tree
 ├── auth/
 │   ├── app/
-│   │   ├── app.js              # Google OAuth + JWT ל-Jitsi
+│   │   ├── app.js               # Google OAuth + JWT for Jitsi
 │   │   ├── Dockerfile
 │   │   ├── docker-compose.yml
 │   │   └── .env.example
-│   └── node_modules/            # לא ב-Git (התקנה מקומית אם מפתחים מחוץ ל-Docker)
+│   └── node_modules/            # Not in Git (local dev outside Docker)
 └── monitoring/
     ├── docker-compose.yml
     ├── prometheus/
@@ -229,6 +230,6 @@ comm-platform/
     └── .env.example
 ```
 
-## סיכום
+## Summary
 
-הפרויקט ממחיש פריסה **production-style** של כלי שיתוף פעולה בקוד פתוח: Rocket.Chat, Jitsi Meet, חשיפה מאובטחת ב-HTTPS, אינטגרציית **זהויות** עם **Google OAuth** ו-**JWT** לווידאו, שכבת **Nginx** אחורית, אוטומציית **תעודות** עם **Let’s Encrypt**, וארגון **קונפיגורציה** סביב **Docker Compose** וקבצי **סביבה** — בלי לכלול סודות במאגר, בהתאם לנהוג ב-DevOps מודרני.
+This repository demonstrates a **production-style** deployment of open-source collaboration tools: Rocket.Chat, Jitsi Meet, secure **HTTPS** exposure, **Google OAuth** plus **JWT** for video identity, **Nginx** reverse proxy, **Let’s Encrypt** automation, and **Docker Compose** + **environment-based** configuration—without committing secrets, consistent with modern DevOps practice.
