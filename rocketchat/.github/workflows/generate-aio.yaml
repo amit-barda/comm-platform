@@ -1,0 +1,43 @@
+name: Generate AIO docker-file
+run-name: Generate AIO docker-file
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - generated/
+
+jobs:
+  build-aio-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: "Setup yq"
+        uses: dcarbone/install-yq-action@a4d38a4645917c1eae26f5d22fce0675ff826dab
+        with:
+          version: "v4.43.1"
+
+      - name: run script
+        run: |
+          set -euo pipefail
+          mkdir -p generated
+          yq eval-all '. as $item ireduce ({}; . * $item)' \
+            compose.yml \
+            compose.database.yml \
+            compose.traefik.yml \
+            | tee generated/docker-compose.yml
+
+          yq eval-all '. as $item ireduce ({}; . * $item)' \
+            compose.yml \
+            compose.database.yml \
+            | tee generated/docker-compose-no-traefik.yml
+
+      - name: Push to master
+        uses: EndBug/add-and-commit@v9
+        with:
+          add: "generated/"
+          message: "Generated docker-compose.yml in generated/docker-compose.yml"
+          push: true

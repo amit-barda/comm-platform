@@ -1,0 +1,43 @@
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: rocketchat-mongodb
+    restart: unless-stopped
+    command: mongod --oplogSize 128 --replSet rs0 --storageEngine=wiredTiger
+    volumes:
+      - mongodb_data:/data/db
+
+  mongodb-init-replica:
+    image: mongo:7.0
+    container_name: rocketchat-mongodb-init
+    depends_on:
+      - mongodb
+    restart: "no"
+    command: >
+      bash -c "
+      sleep 10 &&
+      mongosh --host mongodb:27017 --eval '
+        rs.initiate({
+          _id: \"rs0\",
+          members: [{ _id: 0, host: \"mongodb:27017\" }]
+        })
+      ' || true
+      "
+
+  rocketchat:
+    image: registry.rocket.chat/rocketchat/rocket.chat:8.0.1
+    container_name: rocketchat
+    restart: unless-stopped
+    depends_on:
+      - mongodb
+    environment:
+      ROOT_URL: https://chat.think-deploy.com
+      PORT: 3000
+      MONGO_URL: mongodb://mongodb:27017/rocketchat?replicaSet=rs0
+      MONGO_OPLOG_URL: mongodb://mongodb:27017/local?replicaSet=rs0
+      DEPLOY_METHOD: docker
+    ports:
+      - "127.0.0.1:3000:3000"
+
+volumes:
+  mongodb_data:

@@ -1,0 +1,43 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+!**/.env.example
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Logs and data
+*.log
+logs/
+data/
+tmp/
+certbot/
+letsencrypt/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+
+# Cloudflare / tunnels (if used)
+/root/.cloudflared/
+.cloudflared/
+
+# Jitsi / Rocket.Chat local state (paths may differ per host)
+**/.jitsi-meet-cfg/
+
+# Backups
+*.save
+*.bak
+*~
+
+# Optional large artifacts
+*.tar.gz
