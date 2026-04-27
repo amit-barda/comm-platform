@@ -1,44 +1,59 @@
-# Environment and secrets
+# ---- Secrets (never commit real env files) ---------------------------------
 .env
-.env.*
+**/.env
 !.env.example
 !**/.env.example
+
+# Certificates / private keys
 *.pem
 *.key
 *.crt
 *.csr
 *.p12
 
-# Dependencies
+# ---- Dependencies / build output -------------------------------------------
 node_modules/
+**/node_modules/
 npm-debug.log*
 yarn-error.log*
 
-# Logs and data
+# ---- Logs and runtime data --------------------------------------------------
 *.log
 logs/
 data/
+**/data/
 tmp/
 certbot/
 letsencrypt/
 
-# OS / editors
+# ---- Generated files (e.g. Rocket.Chat, build outputs) ----------------------
+generated/
+**/generated/
+files/
+**/files/
+
+# ---- Local Jitsi state ------------------------------------------------------
+**/.jitsi-meet-cfg/
+
+# ---- OS / editor noise ------------------------------------------------------
 .DS_Store
 .idea/
 .vscode/
+*.swp
+*~
 
-# Cloudflare / tunnels (if used)
-/root/.cloudflared/
-.cloudflared/
-
-# Jitsi / Rocket.Chat local state (paths may differ per host)
-**/.jitsi-meet-cfg/
-
-# Backups
+# ---- Backups ----------------------------------------------------------------
 *.save
 *.bak
-*~
+*.bak.*
 compose.yml.bak
 
-# Optional large artifacts
+# ---- Cloudflare tunnels (if used) -------------------------------------------
+.cloudflared/
+/root/.cloudflared/
+
+# ---- Large vendored artifacts ----------------------------------------------
 *.tar.gz
+
+# ---- Debug instrumentation (temporary) -------------------------------------
+.debug/

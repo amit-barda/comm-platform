@@ -26,4 +26,3 @@ scrape_configs:
           job: docker
           host: thinkdeploy-server
           __path__: /var/lib/docker/containers/*/*.log
-

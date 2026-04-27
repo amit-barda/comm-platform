@@ -1,5 +1,0 @@
-- targets:
-    - prometheus:9090
-  labels:
-    job: prometheus
-    service: prometheus
