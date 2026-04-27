@@ -46,6 +46,7 @@ services:
       - "80:80"
       - "443:443"
     volumes:
+      - ./nginx/init-certs.sh:/docker-entrypoint.d/00-init-certs.sh:ro
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - ./certbot/conf:/etc/letsencrypt
       - ./certbot/www:/var/www/certbot
