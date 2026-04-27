@@ -19,14 +19,22 @@ mounted on the same Jitsi domain under `/oauth/*`.
 
 1. [Architecture](#architecture)
 2. [Service URLs](#service-urls)
-3. [Networks and exposed ports](#networks-and-exposed-ports)
-4. [Repository layout](#repository-layout)
-5. [Prerequisites](#prerequisites)
-6. [DNS requirements](#dns-requirements)
-7. [Deployment steps](#deployment-steps)
-8. [Day-2 operations](#day-2-operations)
-9. [Configuration reference](#configuration-reference)
-10. [Troubleshooting](#troubleshooting)
+3. [Domains](#domains)
+4. [Ports](#ports)
+5. [Networks and exposed ports](#networks-and-exposed-ports)
+6. [Repository layout](#repository-layout)
+7. [Prerequisites](#prerequisites)
+8. [DNS requirements](#dns-requirements)
+9. [Deployment steps](#deployment-steps)
+10. [Google SSO setup](#google-sso-setup)
+11. [SMTP setup](#smtp-setup)
+12. [Observability setup](#observability-setup)
+13. [Validation commands](#validation-commands)
+14. [Day-2 operations](#day-2-operations)
+15. [Configuration reference](#configuration-reference)
+16. [Credentials](#credentials)
+17. [Known limitations](#known-limitations)
+18. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -118,6 +126,29 @@ Key principles:
 | Prometheus     | (internal only)                                  | `prometheus:9090`     |
 | Loki           | (internal only)                                  | `loki:3100`           |
 | MongoDB        | (internal only, no host port)                    | `mongodb:27017`       |
+
+---
+
+## Domains
+
+| Domain                         | Routed to          | Purpose                            |
+|--------------------------------|--------------------|------------------------------------|
+| `chat.think-deploy.com`        | `rocketchat`       | Rocket.Chat web UI and API         |
+| `video.think-deploy.com`       | `jitsi-web`        | Jitsi Meet web UI                  |
+| `video.think-deploy.com/oauth` | `auth-service`     | Google OAuth -> Jitsi JWT bridge   |
+| `grafana.think-deploy.com`     | `grafana`          | Grafana dashboards                 |
+
+---
+
+## Ports
+
+| Host port       | Container/service | Why exposed publicly |
+|-----------------|-------------------|----------------------|
+| `80/tcp`        | `nginx`           | ACME challenge + HTTP->HTTPS redirect |
+| `443/tcp`       | `nginx`           | TLS reverse proxy for all public apps |
+| `10000/udp`     | `jitsi-jvb`       | Jitsi WebRTC media path |
+
+No other host ports are exposed.
 
 ---
 
@@ -293,6 +324,111 @@ page).
 
 ---
 
+## Google SSO setup
+
+### Rocket.Chat (organization Google accounts)
+
+Rocket.Chat authentication is independent from Jitsi.
+
+1. In Google Cloud create an OAuth client (Web application).
+2. Add redirect URI:
+   - `https://chat.think-deploy.com/_oauth/google?close`
+3. In Rocket.Chat Admin UI:
+   - **Administration -> OAuth -> Google**: enable and set client id/secret.
+   - **Accounts -> Registration**: disable public registration as needed.
+   - **Accounts -> Registration -> Restrict to Domain**: set your org domain.
+4. Optionally disable password login in Rocket.Chat auth settings if policy
+   requires Google-only access.
+
+### Jitsi (standalone Google SSO gate)
+
+Jitsi does not integrate with Rocket.Chat. It uses a separate `auth-service`
+for Google OAuth and JWT issuance.
+
+1. In Google Cloud create/update an OAuth client (Web application).
+2. Add redirect URI:
+   - `https://video.think-deploy.com/oauth/google/callback`
+3. In `.env` set:
+   - `GOOGLE_CLIENT_ID`
+   - `GOOGLE_CLIENT_SECRET`
+   - `ALLOWED_GOOGLE_DOMAIN=yourdomain.com`
+   - `JWT_SECRET` (shared signing key)
+4. Restart Jitsi auth stack:
+   - `docker compose up -d --build auth-service jitsi-web jitsi-prosody jitsi-jicofo`
+
+The `auth-service` enforces that Google account emails end with
+`@ALLOWED_GOOGLE_DOMAIN`; other accounts receive `403 Forbidden`.
+
+---
+
+## SMTP setup
+
+SMTP is implemented for both Rocket.Chat and Grafana.
+
+Set in `.env`:
+
+- `ROCKETCHAT_MAIL_URL`
+- `SMTP_USERNAME`
+- `SMTP_PASSWORD`
+- `GRAFANA_SMTP_ENABLED=true`
+- `SMTP_HOST=smtp.example.com:587`
+- `SMTP_FROM_ADDRESS=alerts@yourdomain.com`
+
+Apply:
+
+```bash
+docker compose up -d rocketchat grafana
+```
+
+Test:
+
+- **Rocket.Chat**: trigger password reset email from login screen.
+- **Grafana**: Alerting -> Contact points -> Email -> Test.
+
+---
+
+## Observability setup
+
+The stack ships with Prometheus + Loki + Promtail + Grafana, all in Compose.
+
+- Grafana is auto-provisioned with:
+  - `Prometheus` datasource (`http://prometheus:9090`)
+  - `Loki` datasource (`http://loki:3100`)
+  - dashboard: `Loki — Comm Platform Logs`
+- Dashboard URL:
+  - `https://grafana.think-deploy.com/d/comm-platform-loki`
+- Promtail collects:
+  - `/var/log/*.log`
+  - Docker container logs with labels (`service`, `container`, `project`)
+
+---
+
+## Validation commands
+
+```bash
+docker compose config
+docker compose pull
+docker compose up -d
+docker compose ps
+docker compose logs -f nginx
+docker compose logs -f rocketchat
+docker compose logs -f mongo
+docker compose logs -f grafana
+```
+
+Service checks:
+
+```bash
+curl -I https://chat.think-deploy.com
+curl -I https://video.think-deploy.com
+curl -I https://grafana.think-deploy.com
+```
+
+Note: the Mongo service name in this repository is `mongodb`, so
+`docker compose logs -f mongo` will fail; use `docker compose logs -f mongodb`.
+
+---
+
 ## Day-2 operations
 
 ```bash
@@ -342,6 +478,9 @@ docker compose down -v
 | `JICOFO_AUTH_PASSWORD`            | jicofo, prosody      | Internal XMPP shared secret.                                        |
 | `JICOFO_COMPONENT_SECRET`         | jicofo, prosody      | Internal XMPP component secret.                                     |
 | `JVB_AUTH_PASSWORD`               | jvb, prosody         | Internal XMPP shared secret.                                        |
+| `GOOGLE_CLIENT_ID/_SECRET`        | auth-service         | OAuth client for Jitsi Google sign-in.                              |
+| `ALLOWED_GOOGLE_DOMAIN`           | auth-service         | Enforces organization-domain-only Jitsi access.                     |
+| `JWT_SECRET`                      | auth-service/jitsi   | Shared HMAC key for Jitsi JWT signing/verification.                 |
 
 ### Nginx
 
@@ -375,6 +514,28 @@ Grafana opens directly with provisioned data sources and a ready log dashboard:
   - `{service="nginx"}`
   - `{service="rocketchat"}`
   - `{service=~"jitsi-.*"}`
+
+---
+
+## Credentials
+
+- **Rocket.Chat admin**: created during Rocket.Chat first-run setup wizard.
+- **Grafana admin**: from `.env` (`GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD`).
+- **Jitsi access control**: Google OAuth via `auth-service`, restricted by
+  `ALLOWED_GOOGLE_DOMAIN`.
+- **No secrets in Git**: commit only placeholders in `.env.example`.
+- **Do not commit `.env`**: it contains live credentials/secrets.
+
+---
+
+## Known limitations
+
+- Jitsi domain restriction is email-suffix based (`@ALLOWED_GOOGLE_DOMAIN`).
+  If you need group-based authorization, add Google Directory / IAM checks.
+- First certificate issuance requires clearing placeholder cert directories
+  created by `nginx/init-certs.sh`.
+- `docker compose logs -f mongo` (assignment wording) does not match this repo's
+  service name (`mongodb`); use `docker compose logs -f mongodb`.
 
 ---
 
@@ -509,5 +670,37 @@ Checklist:
    docker compose exec grafana grafana-cli admin reset-admin-password test
    # then send a test alert from Alerting -> Contact points -> Test
    ```
+
+### Prometheus targets are DOWN
+
+```bash
+docker compose logs --tail=200 prometheus
+curl -s http://127.0.0.1:9090/api/v1/targets | jq '.data.activeTargets[] | {scrapeUrl, health, lastError}'
+```
+
+Checklist:
+
+1. Target containers are running and healthy (`docker compose ps`).
+2. Prometheus config is mounted correctly:
+   `docker compose exec prometheus cat /etc/prometheus/prometheus.yml`
+3. Service names in `monitoring/prometheus.yml` match compose services.
+4. Target is reachable from the `monitoring` network.
+
+### Loki shows no logs
+
+```bash
+docker compose logs --tail=200 promtail
+docker compose logs --tail=200 loki
+curl -s http://127.0.0.1:3100/loki/api/v1/labels
+curl -s http://127.0.0.1:3100/loki/api/v1/label/service/values
+```
+
+Checklist:
+
+1. `promtail` has Docker socket mounted: `/var/run/docker.sock:/var/run/docker.sock:ro`.
+2. Promtail can discover Docker targets (look for `added Docker target` logs).
+3. Loki datasource in Grafana points to `http://loki:3100`.
+4. Query recent data in Grafana Explore with:
+   `{job="docker"}` or `{service="nginx"}`.
 
 ---

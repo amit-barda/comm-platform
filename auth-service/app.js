@@ -23,12 +23,16 @@ const JWT_APP_ID       = process.env.JWT_APP_ID       || 'thinkdeploy';
 const JWT_AUDIENCE     = process.env.JWT_AUDIENCE     || JWT_APP_ID;
 const JWT_ISSUER       = process.env.JWT_ISSUER       || JWT_APP_ID;
 const JWT_SUB          = process.env.JWT_SUB          || 'meet.jitsi';
+const ALLOWED_GOOGLE_DOMAIN = (process.env.ALLOWED_GOOGLE_DOMAIN || '').trim().toLowerCase();
 
 if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
   console.warn('[auth-service] GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are not set — OAuth will fail.');
 }
 if (!process.env.JWT_SECRET) {
   console.warn('[auth-service] JWT_SECRET is not set — token signing will fail.');
+}
+if (!ALLOWED_GOOGLE_DOMAIN) {
+  console.warn('[auth-service] ALLOWED_GOOGLE_DOMAIN is empty — domain restriction is disabled.');
 }
 
 passport.use(new GoogleStrategy(
@@ -60,6 +64,16 @@ app.get('/oauth/google', (req, res, next) => {
 app.get('/oauth/google/callback',
   passport.authenticate('google', { session: false, failureRedirect: '/oauth/healthz' }),
   (req, res) => {
+    const email = req.user && req.user.emails && req.user.emails[0] && req.user.emails[0].value;
+    if (!email) {
+      return res.status(403).json({ error: 'Google profile email is missing.' });
+    }
+    if (ALLOWED_GOOGLE_DOMAIN && !email.toLowerCase().endsWith(`@${ALLOWED_GOOGLE_DOMAIN}`)) {
+      return res.status(403).json({
+        error: 'Forbidden: Google account is not in the allowed organization domain.',
+      });
+    }
+
     let room = 'lobby';
     try {
       const decoded = JSON.parse(Buffer.from(req.query.state || '', 'base64url').toString('utf8'));
@@ -76,7 +90,7 @@ app.get('/oauth/google/callback',
         context: {
           user: {
             name:  req.user && req.user.displayName,
-            email: req.user && req.user.emails && req.user.emails[0] && req.user.emails[0].value,
+            email,
           },
         },
       },
