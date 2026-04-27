@@ -1,9 +1,0 @@
-*.swp
-.env
-.env.save
-.env.bak
-!.env.production.example
-docker-compose.override.yml
-log-analyser/grafana
-**/.DS_Store
-**/.idea

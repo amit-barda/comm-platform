@@ -23,7 +23,10 @@ logs/
 data/
 **/data/
 tmp/
-certbot/
+
+# ---- Certbot state (issued certs + ACME webroot) ----------------------------
+certbot/conf/
+certbot/www/
 letsencrypt/
 
 # ---- Generated files (e.g. Rocket.Chat, build outputs) ----------------------
@@ -31,9 +34,6 @@ generated/
 **/generated/
 files/
 **/files/
-
-# ---- Local Jitsi state ------------------------------------------------------
-**/.jitsi-meet-cfg/
 
 # ---- OS / editor noise ------------------------------------------------------
 .DS_Store
@@ -57,3 +57,7 @@ compose.yml.bak
 
 # ---- Debug instrumentation (temporary) -------------------------------------
 .debug/
+
+# ---- Local SSH key material accidentally generated in the repo --------------
+git
+git.pub
